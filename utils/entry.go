@@ -40,3 +40,26 @@ func sizeVarint(x uint64) (n int) {
 	}
 	return n
 }
+
+type Entry struct {
+	Key       []byte
+	Value     []byte
+	ExpiresAt uint64
+
+	Meta         byte
+	Version      uint64
+	Offset       uint32
+	Hlen         int //len of header
+	ValThreshold int64
+}
+
+func NewEntry(key, value []byte) *Entry {
+	return &Entry{
+		Key:   key,
+		Value: value,
+	}
+}
+
+func (e *Entry) Entry() *Entry {
+	return e
+}

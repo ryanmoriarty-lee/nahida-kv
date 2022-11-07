@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	"log"
 	"math"
+	"strings"
 	"sync/atomic"
 	_ "unsafe"
 )
@@ -327,6 +329,157 @@ func (s *Skiplist) Search(key []byte) ValueStruct {
 	val := s.arena.getVal(valOffset, valSize)
 
 	return val
+}
+
+// NewIterator returns a skiplist iterator.  You have to Close() the iterator.
+func (s *Skiplist) NewSkipListIterator() Iterator {
+	s.IncrRef()
+	return &SkipListIterator{list: s}
+}
+
+// MemSize returns the size of the Skiplist in terms of how much memory is used within its internal
+// arena.
+func (s *Skiplist) MemSize() int64 { return s.arena.size() }
+
+// Draw plot Skiplist, align represents align the same node in different level
+func (s *Skiplist) Draw(align bool) {
+	reverseTree := make([][]string, s.getHeight())
+	head := s.getHead()
+	for level := int(s.getHeight()) - 1; level >= 0; level-- {
+		next := head
+		for {
+			var nodeStr string
+			next = s.getNext(next, level)
+			if next != nil {
+				key := next.key(s.arena)
+				vs := next.getVs(s.arena)
+				nodeStr = fmt.Sprintf("%s(%s)", key, vs.Value)
+			} else {
+				break
+			}
+			reverseTree[level] = append(reverseTree[level], nodeStr)
+		}
+	}
+
+	// align
+	if align && s.getHeight() > 1 {
+		baseFloor := reverseTree[0]
+		for level := 1; level < int(s.getHeight()); level++ {
+			pos := 0
+			for _, ele := range baseFloor {
+				if pos == len(reverseTree[level]) {
+					break
+				}
+				if ele != reverseTree[level][pos] {
+					newStr := fmt.Sprintf(strings.Repeat("-", len(ele)))
+					reverseTree[level] = append(reverseTree[level][:pos+1], reverseTree[level][pos:]...)
+					reverseTree[level][pos] = newStr
+				}
+				pos++
+			}
+		}
+	}
+
+	// plot
+	for level := int(s.getHeight()) - 1; level >= 0; level-- {
+		fmt.Printf("%d: ", level)
+		for pos, ele := range reverseTree[level] {
+			if pos == len(reverseTree[level])-1 {
+				fmt.Printf("%s  ", ele)
+			} else {
+				fmt.Printf("%s->", ele)
+			}
+		}
+		fmt.Println()
+	}
+}
+
+// Iterator is an iterator over skiplist object. For new objects, you just
+// need to initialize Iterator.list.
+type SkipListIterator struct {
+	list *Skiplist
+	n    *node
+}
+
+func (s *SkipListIterator) Rewind() {
+	s.SeekToFirst()
+}
+
+func (s *SkipListIterator) Item() Item {
+	return &Entry{
+		Key:       s.Key(),
+		Value:     s.Value().Value,
+		ExpiresAt: s.Value().ExpiresAt,
+		Meta:      s.Value().Meta,
+		Version:   s.Value().Version,
+	}
+}
+
+// Close frees the resources held by the iterator
+func (s *SkipListIterator) Close() error {
+	s.list.DecrRef()
+	return nil
+}
+
+// Valid returns true iff the iterator is positioned at a valid node.
+func (s *SkipListIterator) Valid() bool { return s.n != nil }
+
+// Key returns the key at the current position.
+func (s *SkipListIterator) Key() []byte {
+	return s.list.arena.getKey(s.n.keyOffset, s.n.keySize)
+}
+
+// Value returns value.
+func (s *SkipListIterator) Value() ValueStruct {
+	valOffset, valSize := s.n.getValueOffset()
+	return s.list.arena.getVal(valOffset, valSize)
+}
+
+// ValueUint64 returns the uint64 value of the current node.
+func (s *SkipListIterator) ValueUint64() uint64 {
+	return s.n.value
+}
+
+// Next advances to the next position.
+func (s *SkipListIterator) Next() {
+	AssertTrue(s.Valid())
+	s.n = s.list.getNext(s.n, 0)
+}
+
+// Prev advances to the previous position.
+func (s *SkipListIterator) Prev() {
+	AssertTrue(s.Valid())
+	s.n, _ = s.list.findNear(s.Key(), true, false) // find <. No equality allowed.
+}
+
+// Seek advances to the first entry with a key >= target.
+func (s *SkipListIterator) Seek(target []byte) {
+	s.n, _ = s.list.findNear(target, false, true) // find >=.
+}
+
+// SeekForPrev finds an entry with key <= target.
+func (s *SkipListIterator) SeekForPrev(target []byte) {
+	s.n, _ = s.list.findNear(target, true, true) // find <=.
+}
+
+// SeekToFirst seeks position at the first entry in list.
+// Final state of iterator is Valid() iff list is not empty.
+func (s *SkipListIterator) SeekToFirst() {
+	s.n = s.list.getNext(s.list.getHead(), 0)
+}
+
+// SeekToLast seeks position at the last entry in list.
+// Final state of iterator is Valid() iff list is not empty.
+func (s *SkipListIterator) SeekToLast() {
+	s.n = s.list.findLast()
+}
+
+// UniIterator is a unidirectional memtable iterator. It is a thin wrapper around
+// Iterator. We like to keep Iterator as before, because it is more powerful and
+// we might support bidirectional iterators in the future.
+type UniIterator struct {
+	iter     *Iterator
+	reversed bool
 }
 
 //go:linkname FastRand runtime.fastrand

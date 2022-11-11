@@ -1,9 +1,13 @@
 package lsm
 
-import "NahidaKV/utils"
+import (
+	"NahidaKV/utils"
+	"sync"
+)
 
 // LSM _
 type LSM struct {
+	lock       sync.RWMutex
 	memTable   *memTable
 	immutables []*memTable
 	levels     *levelManager
@@ -151,4 +155,26 @@ func (lsm *LSM) GetSkipListFromMemTable() *utils.Skiplist {
 func (lsm *LSM) Rotate() {
 	lsm.immutables = append(lsm.immutables, lsm.memTable)
 	lsm.memTable = lsm.NewMemtable()
+}
+
+func (lsm *LSM) GetMemTables() ([]*memTable, func()) {
+	lsm.lock.RLock()
+	defer lsm.lock.RUnlock()
+
+	var tables []*memTable
+
+	tables = append(tables, lsm.memTable)
+	lsm.memTable.IncrRef()
+
+	last := len(lsm.immutables) - 1
+	for i := range lsm.immutables {
+		tables = append(tables, lsm.immutables[last-i])
+		lsm.immutables[last-i].IncrRef()
+	}
+	return tables, func() {
+		for _, tbl := range tables {
+			tbl.DecrRef()
+		}
+	}
+
 }

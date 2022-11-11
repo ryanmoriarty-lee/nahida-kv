@@ -2,12 +2,13 @@ package utils
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"log"
 	"math"
 	"strings"
 	"sync/atomic"
 	_ "unsafe"
+
+	"github.com/pkg/errors"
 )
 
 const (

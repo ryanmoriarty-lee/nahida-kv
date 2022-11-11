@@ -36,6 +36,7 @@ const (
 const (
 	BitDelete       byte = 1 << 0 // Set if the key has been deleted.
 	BitValuePointer byte = 1 << 1 // Set if the value is NOT stored directly next to key.
+	BitTxn          byte = 1 << 2
 )
 
 // codec

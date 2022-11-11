@@ -2,6 +2,7 @@ package NahidaKV
 
 import (
 	"NahidaKV/file"
+	"NahidaKV/utils"
 	"bufio"
 	"bytes"
 	"encoding/json"
@@ -19,7 +20,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"NahidaKV/utils"
 	"github.com/pkg/errors"
 )
 
@@ -470,6 +470,10 @@ func (vlog *valueLog) rewrite(f *file.LogFile) error {
 
 func (vlog *valueLog) iteratorCount() int {
 	return int(atomic.LoadInt32(&vlog.numActiveIterators))
+}
+
+func (vlog *valueLog) incrIteratorCount() {
+	atomic.AddInt32(&vlog.numActiveIterators, 1)
 }
 
 // TODO 在迭代器close时，需要调用此函数，关闭已经被判定需要移除的logfile
